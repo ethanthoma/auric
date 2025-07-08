@@ -1,0 +1,20 @@
+[project]
+name = "auric"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+auric = "auric.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff.lint]
+select = ["I", "W"]
+fixable = ["ALL"]
+
+[tool.ty.environment]
+python = "./.venv"

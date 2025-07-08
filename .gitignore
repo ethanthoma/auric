@@ -1,0 +1,16 @@
+*
+
+!flake.nix
+!flake.lock
+
+!.gitignore
+!README.md
+
+!.python-version
+!pyproject.toml
+
+!src/auric/
+!src/auric/**/*.py
+
+!example/
+!example/*.py
