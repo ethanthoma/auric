@@ -9,6 +9,7 @@
 !.python-version
 !pyproject.toml
 
+!src/
 !src/auric/
 !src/auric/**/*.py
 
