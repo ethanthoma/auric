@@ -70,3 +70,31 @@ provides
 
 Sub-typing combines the two results and Because each oracle terminates on its
 own, the composition still terminates
+
+## Generics
+
+Having functions over types is super cool and seems totally unsafe in a
+total/productive language (RIP my other note and Zig comptime).
+
+There is probably a finite set of generics this language can have before running
+into those issues, still need to explore...
+
+## Effects
+
+Algebraic effects are super cool but probably not uber performant (idk if that
+matters). I think it is possible to add to the language. Might be nice for the
+productivity aspect (like an IO effect).
+
+Exceptions are less powerful than effects so no reason to entertain the idea.
+
+Errors as values is still supported but I am unsure the trade-off.
+
+Super not a fan of flix syntax but koka looks cool.
+
+## Uniqueness Types
+
+Controlled and limited mutation would be nice. Hard to know if I can sneak this
+in with totality.
+
+Clean Lang seems like a good place to look for uniqueness. Maybe there is a
+limited subset that is decidable.
