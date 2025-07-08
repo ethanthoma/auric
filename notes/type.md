@@ -3,6 +3,8 @@
 programming language with set theoretic types in a total/productive language
 like charity
 
+turing complete languages are everywhere and boring af
+
 ## Totality w/ set types
 
 Not a blocker:
@@ -98,3 +100,15 @@ in with totality.
 
 Clean Lang seems like a good place to look for uniqueness. Maybe there is a
 limited subset that is decidable.
+
+## Let Generalization
+
+No.
+
+## Polymorphism
+
+Can explore ad-hoc (my bb overloading wooot)
+
+Maybe an intersection-of-arrows as the type of an overloaded value
+
+But I'm not super convinced. It is nicer for a sort-of defaults in functions
