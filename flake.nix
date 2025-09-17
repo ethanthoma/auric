@@ -42,12 +42,14 @@
       perSystem =
         { system, ... }:
         let
-          pkgs = inputs.nixpkgs.legacyPackages.${system}.extend (
-            inputs.nixpkgs.lib.composeManyExtensions [
+          pkgs = import inputs.nixpkgs {
+            system = "x86_64-linux";
+            config.allowUnfree = true;
+            overlays = [
               inputs.devshell.overlays.default
               self.overlays.default
-            ]
-          );
+            ];
+          };
 
           python =
             let
@@ -97,7 +99,10 @@
 
             commands = [
               { package = pkgs.uv; }
-              { package = pkgs.gemini-cli; }
+              {
+                name = "claude";
+                package = pkgs.claude-code;
+              }
               {
                 name = "demo";
                 command = "uv run --with . --no-project --refresh-package auric -- python example/demo.py";
