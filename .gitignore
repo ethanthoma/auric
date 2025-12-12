@@ -1,0 +1,16 @@
+*
+
+!flake.nix
+!flake.lock
+
+!.gitignore
+!README.md
+
+!cmd/
+!cmd/**/*.go
+
+!internal/
+!internal/**/*.go
+
+!test/
+!test/**/*.go
