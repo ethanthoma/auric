@@ -19,8 +19,14 @@ type TRecord struct {
 	Fields map[string]Type
 }
 
+type TFunc struct {
+	Params []string
+	Result Type
+}
+
 func (TInt) typ()    {}
 func (TRecord) typ() {}
+func (TFunc) typ()   {}
 
 func (t TInt) String() string {
 	return "Int"
@@ -34,12 +40,50 @@ func (t TRecord) String() string {
 	return "{" + strings.Join(parts, ", ") + "}"
 }
 
+func (t TFunc) String() string {
+	if len(t.Params) == 0 {
+		return fmt.Sprintf("() -> %s", t.Result.String())
+	}
+	return fmt.Sprintf("(%s) -> %s", strings.Join(t.Params, ", "), t.Result.String())
+}
+
 type Checker struct {
 	ctx map[string]Type
 }
 
 func New() *Checker {
 	return &Checker{ctx: make(map[string]Type)}
+}
+
+func elaborateType(te syntax.TypeExpr) (Type, error) {
+	switch t := te.(type) {
+	case syntax.TyInt:
+		return TInt{}, nil
+	case syntax.TyRecord:
+		fields := make(map[string]Type)
+		for _, f := range t.Fields {
+			ty, err := elaborateType(f.Type)
+			if err != nil {
+				return nil, err
+			}
+			fields[f.Name] = ty
+		}
+		return TRecord{Fields: fields}, nil
+	case syntax.TyFunc:
+		params := make([]string, len(t.Params))
+		for i := range t.Params {
+			params[i] = fmt.Sprintf("param%d", i)
+		}
+		result, err := elaborateType(t.Result)
+		if err != nil {
+			return nil, err
+		}
+		return TFunc{Params: params, Result: result}, nil
+	case nil:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unknown type expression: %T", te)
+	}
 }
 
 func (c *Checker) Infer(expr syntax.Expr) (Type, error) {
@@ -128,6 +172,85 @@ func (c *Checker) Infer(expr syntax.Expr) (Type, error) {
 
 		return TInt{}, nil
 
+	case syntax.Into:
+		localEnv := make(map[string]Type)
+		maps.Copy(localEnv, c.ctx)
+
+		var exposedParams []string
+		for _, param := range e.Params {
+			if param.Value == nil {
+				if param.Type == nil {
+					return nil, fmt.Errorf("parameter %s requires type annotation", param.Name)
+				}
+				ty, err := elaborateType(param.Type)
+				if err != nil {
+					return nil, err
+				}
+				localEnv[param.Name] = ty
+				exposedParams = append(exposedParams, param.Name)
+			} else {
+				localChecker := &Checker{ctx: localEnv}
+				ty, err := localChecker.Infer(param.Value)
+				if err != nil {
+					return nil, err
+				}
+				if param.Type != nil {
+					annotatedTy, err := elaborateType(param.Type)
+					if err != nil {
+						return nil, err
+					}
+					if !typeEqual(ty, annotatedTy) {
+						return nil, fmt.Errorf("type mismatch for parameter %s: expected %v, got %v", param.Name, annotatedTy, ty)
+					}
+				}
+				localEnv[param.Name] = ty
+			}
+		}
+
+		bodyChecker := &Checker{ctx: localEnv}
+		resultTy, err := bodyChecker.Infer(e.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		if e.ReturnType != nil {
+			annotatedReturnTy, err := elaborateType(e.ReturnType)
+			if err != nil {
+				return nil, err
+			}
+			if !typeEqual(resultTy, annotatedReturnTy) {
+				return nil, fmt.Errorf("return type mismatch: expected %v, got %v", annotatedReturnTy, resultTy)
+			}
+		}
+
+		return TFunc{Params: exposedParams, Result: resultTy}, nil
+
+	case syntax.App:
+		fnTy, err := c.Infer(e.Fn)
+		if err != nil {
+			return nil, err
+		}
+
+		funcTy, ok := fnTy.(TFunc)
+		if !ok {
+			return nil, fmt.Errorf("not a function type: %v", fnTy)
+		}
+
+		if len(e.Args) != len(funcTy.Params) {
+			return nil, fmt.Errorf("expected %d arguments, got %d", len(funcTy.Params), len(e.Args))
+		}
+
+		argTypes := make([]Type, len(e.Args))
+		for i, arg := range e.Args {
+			ty, err := c.Infer(arg)
+			if err != nil {
+				return nil, err
+			}
+			argTypes[i] = ty
+		}
+
+		return funcTy.Result, nil
+
 	default:
 		return nil, fmt.Errorf("unknown expression type")
 	}
@@ -166,6 +289,15 @@ func typeEqual(a, b Type) bool {
 			}
 		}
 		return true
+	case TFunc:
+		bt, ok := b.(TFunc)
+		if !ok {
+			return false
+		}
+		if len(at.Params) != len(bt.Params) {
+			return false
+		}
+		return typeEqual(at.Result, bt.Result)
 	default:
 		return false
 	}

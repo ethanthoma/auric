@@ -12,14 +12,19 @@ const (
 	NUMBER
 	LBRACE
 	RBRACE
+	LPAREN
+	RPAREN
 	DOT
 	EQUAL
 	SEMI
+	COMMA
+	COLON
 	LET
 	PLUS
 	MINUS
 	STAR
 	SLASH
+	ARROW
 )
 
 type Token struct {
@@ -28,51 +33,67 @@ type Token struct {
 }
 
 type Lexer struct {
-	input string
-	pos   int
+	Input string
+	Pos   int
 }
 
 func New(input string) *Lexer {
-	return &Lexer{input: input}
+	return &Lexer{Input: input}
 }
 
 func (l *Lexer) Next() Token {
 	l.skipWhitespace()
 
-	if l.pos >= len(l.input) {
+	if l.Pos >= len(l.Input) {
 		return Token{Type: EOF}
 	}
 
-	ch := l.input[l.pos]
+	ch := l.Input[l.Pos]
 
 	switch ch {
 	case '{':
-		l.pos++
+		l.Pos++
 		return Token{Type: LBRACE, Value: "{"}
 	case '}':
-		l.pos++
+		l.Pos++
 		return Token{Type: RBRACE, Value: "}"}
+	case '(':
+		l.Pos++
+		return Token{Type: LPAREN, Value: "("}
+	case ')':
+		l.Pos++
+		return Token{Type: RPAREN, Value: ")"}
 	case '.':
-		l.pos++
+		l.Pos++
 		return Token{Type: DOT, Value: "."}
 	case '=':
-		l.pos++
+		l.Pos++
 		return Token{Type: EQUAL, Value: "="}
 	case ';':
-		l.pos++
+		l.Pos++
 		return Token{Type: SEMI, Value: ";"}
+	case ',':
+		l.Pos++
+		return Token{Type: COMMA, Value: ","}
+	case ':':
+		l.Pos++
+		return Token{Type: COLON, Value: ":"}
 	case '+':
-		l.pos++
+		l.Pos++
 		return Token{Type: PLUS, Value: "+"}
-	case '-':
-		l.pos++
-		return Token{Type: MINUS, Value: "-"}
 	case '*':
-		l.pos++
+		l.Pos++
 		return Token{Type: STAR, Value: "*"}
 	case '/':
-		l.pos++
+		l.Pos++
 		return Token{Type: SLASH, Value: "/"}
+	case '-':
+		if l.Pos+1 < len(l.Input) && l.Input[l.Pos+1] == '>' {
+			l.Pos += 2
+			return Token{Type: ARROW, Value: "->"}
+		}
+		l.Pos++
+		return Token{Type: MINUS, Value: "-"}
 	}
 
 	if unicode.IsDigit(rune(ch)) {
@@ -83,30 +104,30 @@ func (l *Lexer) Next() Token {
 		return l.readIdent()
 	}
 
-	l.pos++
+	l.Pos++
 	return Token{Type: EOF}
 }
 
 func (l *Lexer) skipWhitespace() {
-	for l.pos < len(l.input) && unicode.IsSpace(rune(l.input[l.pos])) {
-		l.pos++
+	for l.Pos < len(l.Input) && unicode.IsSpace(rune(l.Input[l.Pos])) {
+		l.Pos++
 	}
 }
 
 func (l *Lexer) readNumber() Token {
-	start := l.pos
-	for l.pos < len(l.input) && unicode.IsDigit(rune(l.input[l.pos])) {
-		l.pos++
+	start := l.Pos
+	for l.Pos < len(l.Input) && unicode.IsDigit(rune(l.Input[l.Pos])) {
+		l.Pos++
 	}
-	return Token{Type: NUMBER, Value: l.input[start:l.pos]}
+	return Token{Type: NUMBER, Value: l.Input[start:l.Pos]}
 }
 
 func (l *Lexer) readIdent() Token {
-	start := l.pos
-	for l.pos < len(l.input) && (unicode.IsLetter(rune(l.input[l.pos])) || unicode.IsDigit(rune(l.input[l.pos])) || l.input[l.pos] == '_') {
-		l.pos++
+	start := l.Pos
+	for l.Pos < len(l.Input) && (unicode.IsLetter(rune(l.Input[l.Pos])) || unicode.IsDigit(rune(l.Input[l.Pos])) || l.Input[l.Pos] == '_') {
+		l.Pos++
 	}
-	value := l.input[start:l.pos]
+	value := l.Input[start:l.Pos]
 
 	if value == "let" {
 		return Token{Type: LET, Value: value}

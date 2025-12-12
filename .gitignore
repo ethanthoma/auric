@@ -12,5 +12,8 @@
 !internal/
 !internal/**/*.go
 
+!docs/
+!docs/**/*.md
+
 !test/
 !test/**/*.go

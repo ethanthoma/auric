@@ -21,8 +21,15 @@ type VRecord struct {
 	Fields map[string]Value
 }
 
-func (VInt) value()    {}
-func (VRecord) value() {}
+type VClosure struct {
+	Params []syntax.Param
+	Body   syntax.Expr
+	Env    map[string]Value
+}
+
+func (VInt) value()     {}
+func (VRecord) value()  {}
+func (VClosure) value() {}
 
 func (v VInt) String() string {
 	return fmt.Sprintf("%d", v.Val)
@@ -34,6 +41,23 @@ func (v VRecord) String() string {
 		parts = append(parts, fmt.Sprintf("%s = %s", k, val.String()))
 	}
 	return "{" + strings.Join(parts, ", ") + "}"
+}
+
+func (v VClosure) String() string {
+	var params []string
+	for _, p := range v.Params {
+		if p.Value == nil {
+			if p.Type != nil {
+				params = append(params, fmt.Sprintf("%s", p.Name))
+			} else {
+				params = append(params, p.Name)
+			}
+		}
+	}
+	if len(params) == 0 {
+		return "<function>"
+	}
+	return fmt.Sprintf("<function(%s)>", strings.Join(params, ", "))
 }
 
 func Eval(expr syntax.Expr, env map[string]Value) (Value, error) {
@@ -140,6 +164,53 @@ func Eval(expr syntax.Expr, env map[string]Value) (Value, error) {
 		}
 
 		return VInt{Val: result}, nil
+
+	case syntax.Into:
+		closureEnv := make(map[string]Value)
+		maps.Copy(closureEnv, env)
+		return VClosure{Params: e.Params, Body: e.Body, Env: closureEnv}, nil
+
+	case syntax.App:
+		fnVal, err := Eval(e.Fn, env)
+		if err != nil {
+			return nil, err
+		}
+
+		closure, ok := fnVal.(VClosure)
+		if !ok {
+			return nil, fmt.Errorf("not a function: %v", fnVal)
+		}
+
+		argVals := make([]Value, len(e.Args))
+		for i, arg := range e.Args {
+			val, err := Eval(arg, env)
+			if err != nil {
+				return nil, err
+			}
+			argVals[i] = val
+		}
+
+		callEnv := make(map[string]Value)
+		maps.Copy(callEnv, closure.Env)
+
+		argIdx := 0
+		for _, param := range closure.Params {
+			if param.Value == nil {
+				if argIdx >= len(argVals) {
+					return nil, fmt.Errorf("not enough arguments")
+				}
+				callEnv[param.Name] = argVals[argIdx]
+				argIdx++
+			} else {
+				val, err := Eval(param.Value, callEnv)
+				if err != nil {
+					return nil, err
+				}
+				callEnv[param.Name] = val
+			}
+		}
+
+		return Eval(closure.Body, callEnv)
 
 	default:
 		return nil, fmt.Errorf("unknown expression type")

@@ -50,9 +50,52 @@ type BinOp struct {
 	Right Expr
 }
 
+type Into struct {
+	Params     []Param
+	ReturnType TypeExpr
+	Body       Expr
+}
+
+type Param struct {
+	Name  string
+	Type  TypeExpr
+	Value Expr
+}
+
+type App struct {
+	Fn   Expr
+	Args []Expr
+}
+
+type TypeExpr interface {
+	typeExpr()
+}
+
+type TyInt struct{}
+
+type TyRecord struct {
+	Fields []TyField
+}
+
+type TyField struct {
+	Name string
+	Type TypeExpr
+}
+
+type TyFunc struct {
+	Params []TypeExpr
+	Result TypeExpr
+}
+
+func (TyInt) typeExpr()    {}
+func (TyRecord) typeExpr() {}
+func (TyFunc) typeExpr()   {}
+
 func (Lit) expr()         {}
 func (Var) expr()         {}
 func (Let) expr()         {}
 func (Record) expr()      {}
 func (FieldAccess) expr() {}
 func (BinOp) expr()       {}
+func (Into) expr()        {}
+func (App) expr()         {}
