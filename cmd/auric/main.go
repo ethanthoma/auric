@@ -8,6 +8,7 @@ import (
 	"github.com/ethanthoma/auric/internal/eval"
 	"github.com/ethanthoma/auric/internal/lexer"
 	"github.com/ethanthoma/auric/internal/parser"
+	"github.com/ethanthoma/auric/internal/totality"
 )
 
 func main() {
@@ -25,6 +26,11 @@ func main() {
 	lex := lexer.New(string(input))
 	parser := parser.New(lex)
 	expr := parser.Parse()
+
+	if err := totality.Check(expr); err != nil {
+		fmt.Fprintf(os.Stderr, "totality error: %v\n", err)
+		os.Exit(1)
+	}
 
 	checker := check.New()
 	ty, err := checker.Infer(expr)

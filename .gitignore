@@ -10,6 +10,7 @@
 !cmd/**/*.go
 
 !internal/
+!internal/*
 !internal/**/*.go
 
 !docs/
