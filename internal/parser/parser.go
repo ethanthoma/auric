@@ -23,8 +23,103 @@ func (p *Parser) next() {
 	p.tok = p.lex.Next()
 }
 
-func (p *Parser) Parse() syntax.Expr {
-	return p.parseExpr()
+func (p *Parser) Parse() syntax.Program {
+	return p.parseProgram()
+}
+
+func (p *Parser) parseProgram() syntax.Program {
+	var typeDefs []syntax.TypeDef
+
+	for p.tok.Type == lexer.TYPE {
+		typeDefs = append(typeDefs, p.parseTypeDef())
+	}
+
+	expr := p.parseExpr()
+
+	return syntax.Program{TypeDefs: typeDefs, Expr: expr}
+}
+
+func (p *Parser) parseTypeDef() syntax.TypeDef {
+	p.next()
+
+	if p.tok.Type != lexer.IDENT {
+		panic(fmt.Sprintf("expected type name, got %v", p.tok))
+	}
+	name := p.tok.Value
+	p.next()
+
+	if p.tok.Type != lexer.EQUAL {
+		panic(fmt.Sprintf("expected = after type name, got %v", p.tok))
+	}
+	p.next()
+
+	if p.tok.Type != lexer.LBRACE {
+		panic(fmt.Sprintf("expected { for type definition, got %v", p.tok))
+	}
+
+	start := p.pos()
+	p.next()
+
+	if p.tok.Type == lexer.IDENT {
+		peekPos := p.pos()
+		secondTok := p.lex.Next()
+		p.lex.Pos = peekPos
+
+		if secondTok.Type == lexer.COLON {
+			p.reset(start)
+			tyExpr := p.parseTypeExpr()
+			return syntax.TypeDef{Name: name, Alias: tyExpr}
+		}
+	}
+
+	var variants []syntax.VariantDef
+	for p.tok.Type != lexer.RBRACE {
+		if p.tok.Type != lexer.IDENT {
+			panic(fmt.Sprintf("expected variant name, got %v", p.tok))
+		}
+		variantName := p.tok.Value
+		p.next()
+
+		var fields []syntax.TyField
+		if p.tok.Type == lexer.ARROW_LEFT {
+			p.next()
+			if p.tok.Type != lexer.LBRACE {
+				panic(fmt.Sprintf("expected { after <-, got %v", p.tok))
+			}
+			p.next()
+
+			for p.tok.Type != lexer.RBRACE {
+				if p.tok.Type != lexer.IDENT {
+					panic(fmt.Sprintf("expected field name, got %v", p.tok))
+				}
+				fieldName := p.tok.Value
+				p.next()
+
+				if p.tok.Type != lexer.COLON {
+					panic(fmt.Sprintf("expected : after field name, got %v", p.tok))
+				}
+				p.next()
+
+				fieldType := p.parseTypeExpr()
+				fields = append(fields, syntax.TyField{Name: fieldName, Type: fieldType})
+
+				switch p.tok.Type {
+				case lexer.COMMA, lexer.SEMI:
+					p.next()
+				}
+			}
+			p.next()
+		}
+
+		variants = append(variants, syntax.VariantDef{Name: variantName, Fields: fields})
+
+		if p.tok.Type == lexer.SEMI {
+			p.next()
+		}
+	}
+	p.next()
+
+	return syntax.TypeDef{Name: name, Variants: variants}
 }
 
 func (p *Parser) parseExpr() syntax.Expr {
@@ -48,7 +143,76 @@ func (p *Parser) parseInto() syntax.Expr {
 		p.reset(start)
 	}
 
-	return p.parseBinOp(0)
+	expr := p.parseBinOp(0)
+
+	if p.tok.Type == lexer.ARROW {
+		p.next()
+		if p.tok.Type == lexer.MATCH {
+			return p.parseMatch(expr)
+		}
+		panic(fmt.Sprintf("expected match after ->, got %v", p.tok))
+	}
+
+	return expr
+}
+
+func (p *Parser) parseMatch(scrutinee syntax.Expr) syntax.Expr {
+	p.next()
+
+	if p.tok.Type != lexer.LBRACE {
+		panic(fmt.Sprintf("expected { after match, got %v", p.tok))
+	}
+	p.next()
+
+	var cases []syntax.MatchCase
+	for p.tok.Type != lexer.RBRACE {
+		pattern := p.parsePattern()
+
+		if p.tok.Type != lexer.DOUBLE_ARROW {
+			panic(fmt.Sprintf("expected => after pattern, got %v", p.tok))
+		}
+		p.next()
+
+		body := p.parseExpr()
+		cases = append(cases, syntax.MatchCase{Pattern: pattern, Body: body})
+
+		switch p.tok.Type {
+		case lexer.COMMA, lexer.SEMI:
+			p.next()
+		}
+	}
+	p.next()
+
+	return syntax.Match{Scrutinee: scrutinee, Cases: cases}
+}
+
+func (p *Parser) parsePattern() syntax.Pattern {
+	if p.tok.Type == lexer.IDENT {
+		name := p.tok.Value
+		p.next()
+
+		if p.tok.Type == lexer.LBRACE {
+			p.next()
+			var fields []string
+			for p.tok.Type != lexer.RBRACE {
+				if p.tok.Type != lexer.IDENT {
+					panic(fmt.Sprintf("expected field name in pattern, got %v", p.tok))
+				}
+				fields = append(fields, p.tok.Value)
+				p.next()
+
+				if p.tok.Type == lexer.COMMA {
+					p.next()
+				}
+			}
+			p.next()
+			return syntax.PatternVariant{Variant: name, Fields: fields}
+		}
+
+		return syntax.PatternVariant{Variant: name, Fields: nil}
+	}
+
+	panic(fmt.Sprintf("expected pattern, got %v", p.tok))
 }
 
 func (p *Parser) pos() int {
@@ -102,6 +266,46 @@ func (p *Parser) parseParamList() ([]syntax.Param, syntax.TypeExpr) {
 }
 
 func (p *Parser) parseTypeExpr() syntax.TypeExpr {
+	baseType := p.parseBaseType()
+
+	if p.tok.Type == lexer.LBRACKET {
+		p.next()
+		if p.tok.Type == lexer.RBRACKET {
+			p.next()
+			return syntax.TySized{Base: baseType, Size: syntax.SizeSlice{}}
+		}
+
+		if p.tok.Type != lexer.NUMBER {
+			panic(fmt.Sprintf("expected number or ] in array type, got %v", p.tok))
+		}
+		size, _ := strconv.Atoi(p.tok.Value)
+		p.next()
+
+		if p.tok.Type != lexer.RBRACKET {
+			panic(fmt.Sprintf("expected ] after array size, got %v", p.tok))
+		}
+		p.next()
+		return syntax.TySized{Base: baseType, Size: syntax.SizeFixed{Size: size}}
+	}
+
+	return baseType
+}
+
+func (p *Parser) parseBaseType() syntax.TypeExpr {
+	if p.tok.Type == lexer.LPAREN {
+		p.next()
+		if p.tok.Type == lexer.RPAREN {
+			p.next()
+			if p.tok.Type == lexer.ARROW {
+				p.next()
+				resultType := p.parseTypeExpr()
+				return syntax.TyFunc{Params: nil, Result: resultType}
+			}
+			panic(fmt.Sprintf("expected -> after (), got %v", p.tok))
+		}
+		panic(fmt.Sprintf("thunk types must be () ->, got %v", p.tok))
+	}
+
 	if p.tok.Type == lexer.IDENT {
 		name := p.tok.Value
 		p.next()
@@ -109,7 +313,7 @@ func (p *Parser) parseTypeExpr() syntax.TypeExpr {
 		case "Int":
 			return syntax.TyInt{}
 		default:
-			panic(fmt.Sprintf("unknown type: %s", name))
+			return syntax.TySum{Name: name}
 		}
 	}
 
@@ -131,7 +335,8 @@ func (p *Parser) parseTypeExpr() syntax.TypeExpr {
 			fieldType := p.parseTypeExpr()
 			fields = append(fields, syntax.TyField{Name: fieldName, Type: fieldType})
 
-			if p.tok.Type == lexer.SEMI {
+			switch p.tok.Type {
+			case lexer.COMMA, lexer.SEMI:
 				p.next()
 			}
 		}
@@ -190,6 +395,40 @@ func (p *Parser) parsePostfix() syntax.Expr {
 			args := p.parseArgList()
 			expr = syntax.App{Fn: expr, Args: args}
 
+		case lexer.LBRACKET:
+			p.next()
+			if p.tok.Type == lexer.DOTDOT {
+				p.next()
+				end := p.parseBinOp(0)
+				if p.tok.Type != lexer.RBRACKET {
+					panic(fmt.Sprintf("expected ] after slice end, got %v", p.tok))
+				}
+				p.next()
+				expr = syntax.Slice{Array: expr, Start: nil, End: end}
+			} else {
+				index := p.parseBinOp(0)
+				if p.tok.Type == lexer.DOTDOT {
+					p.next()
+					if p.tok.Type == lexer.RBRACKET {
+						p.next()
+						expr = syntax.Slice{Array: expr, Start: index, End: nil}
+					} else {
+						end := p.parseBinOp(0)
+						if p.tok.Type != lexer.RBRACKET {
+							panic(fmt.Sprintf("expected ] after slice end, got %v", p.tok))
+						}
+						p.next()
+						expr = syntax.Slice{Array: expr, Start: index, End: end}
+					}
+				} else {
+					if p.tok.Type != lexer.RBRACKET {
+						panic(fmt.Sprintf("expected ] after index, got %v", p.tok))
+					}
+					p.next()
+					expr = syntax.Index{Array: expr, Index: index}
+				}
+			}
+
 		default:
 			return expr
 		}
@@ -229,13 +468,11 @@ func (p *Parser) parseLet() syntax.Expr {
 	value := p.parseExpr()
 
 	var body syntax.Expr
-	if p.tok.Type == lexer.SEMI || p.tok.Type == lexer.EOF {
-		if p.tok.Type == lexer.SEMI {
-			p.next()
-		}
-		if p.tok.Type != lexer.EOF {
-			body = p.parseExpr()
-		}
+	if p.tok.Type == lexer.SEMI {
+		p.next()
+	}
+	if p.tok.Type != lexer.EOF && p.tok.Type != lexer.RBRACE {
+		body = p.parseExpr()
 	}
 
 	return syntax.Let{Name: name, Value: value, Body: body}
@@ -251,14 +488,71 @@ func (p *Parser) parsePrimary() syntax.Expr {
 	case lexer.IDENT:
 		name := p.tok.Value
 		p.next()
+		if p.tok.Type == lexer.LBRACE {
+			return p.parseVariantConstruct(name)
+		}
 		return syntax.Var{Name: name}
 
 	case lexer.LBRACE:
 		return p.parseRecord()
 
+	case lexer.LBRACKET:
+		return p.parseArrayLit()
+
 	default:
 		panic(fmt.Sprintf("unexpected token: %v", p.tok))
 	}
+}
+
+func (p *Parser) parseArrayLit() syntax.Expr {
+	p.next()
+
+	var elements []syntax.Expr
+	for p.tok.Type != lexer.RBRACKET {
+		elem := p.parseExpr()
+		elements = append(elements, elem)
+
+		if p.tok.Type == lexer.COMMA {
+			p.next()
+		}
+	}
+
+	p.next()
+	return syntax.ArrayLit{Elements: elements}
+}
+
+func (p *Parser) parseVariantConstruct(variant string) syntax.Expr {
+	p.next()
+
+	var fields []syntax.FieldDef
+	for p.tok.Type != lexer.RBRACE {
+		if p.tok.Type != lexer.DOT {
+			panic(fmt.Sprintf("expected . for field in variant, got %v", p.tok))
+		}
+		p.next()
+
+		if p.tok.Type != lexer.IDENT {
+			panic(fmt.Sprintf("expected field name, got %v", p.tok))
+		}
+		fieldName := p.tok.Value
+		p.next()
+
+		if p.tok.Type != lexer.EQUAL {
+			panic(fmt.Sprintf("expected =, got %v", p.tok))
+		}
+		p.next()
+
+		fieldValue := p.parseExpr()
+		fields = append(fields, syntax.FieldDef{Name: fieldName, Value: fieldValue})
+
+		switch p.tok.Type {
+		case lexer.COMMA, lexer.SEMI:
+			p.next()
+		}
+	}
+	p.next()
+
+	return syntax.VariantConstruct{Variant: variant, Fields: fields}
 }
 
 func (p *Parser) parseRecord() syntax.Expr {

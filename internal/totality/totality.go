@@ -2,6 +2,7 @@ package totality
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/ethanthoma/auric/internal/syntax"
 )
@@ -65,15 +66,17 @@ func (g *CallGraph) HasCycle() (bool, []string) {
 }
 
 type Analyzer struct {
-	graph     *CallGraph
-	currentFn string
-	bindings  map[string]bool
+	graph          *CallGraph
+	currentFn      string
+	bindings       map[string]bool
+	structuralVars map[string]bool
 }
 
 func NewAnalyzer() *Analyzer {
 	return &Analyzer{
-		graph:    NewCallGraph(),
-		bindings: make(map[string]bool),
+		graph:          NewCallGraph(),
+		bindings:       make(map[string]bool),
+		structuralVars: make(map[string]bool),
 	}
 }
 
@@ -139,7 +142,19 @@ func (a *Analyzer) AnalyzeExpr(expr syntax.Expr) error {
 
 		if v, ok := e.Fn.(syntax.Var); ok {
 			if a.bindings[v.Name] && a.currentFn != "" {
-				a.graph.AddEdge(a.currentFn, v.Name)
+				isStructural := false
+				for _, arg := range e.Args {
+					if argVar, ok := arg.(syntax.Var); ok {
+						if a.structuralVars[argVar.Name] {
+							isStructural = true
+							break
+						}
+					}
+				}
+
+				if !isStructural {
+					a.graph.AddEdge(a.currentFn, v.Name)
+				}
 			}
 		}
 
@@ -150,14 +165,73 @@ func (a *Analyzer) AnalyzeExpr(expr syntax.Expr) error {
 		}
 		return nil
 
+	case syntax.VariantConstruct:
+		for _, field := range e.Fields {
+			if err := a.AnalyzeExpr(field.Value); err != nil {
+				return err
+			}
+		}
+		return nil
+
+	case syntax.Match:
+		if err := a.AnalyzeExpr(e.Scrutinee); err != nil {
+			return err
+		}
+
+		for _, c := range e.Cases {
+			oldStructuralVars := make(map[string]bool)
+			maps.Copy(oldStructuralVars, a.structuralVars)
+
+			if pattern, ok := c.Pattern.(syntax.PatternVariant); ok {
+				for _, field := range pattern.Fields {
+					a.structuralVars[field] = true
+				}
+			}
+
+			if err := a.AnalyzeExpr(c.Body); err != nil {
+				return err
+			}
+
+			a.structuralVars = oldStructuralVars
+		}
+		return nil
+
+	case syntax.ArrayLit:
+		for _, elem := range e.Elements {
+			if err := a.AnalyzeExpr(elem); err != nil {
+				return err
+			}
+		}
+		return nil
+
+	case syntax.Index:
+		if err := a.AnalyzeExpr(e.Array); err != nil {
+			return err
+		}
+		return a.AnalyzeExpr(e.Index)
+
+	case syntax.Slice:
+		if err := a.AnalyzeExpr(e.Array); err != nil {
+			return err
+		}
+		if e.Start != nil {
+			if err := a.AnalyzeExpr(e.Start); err != nil {
+				return err
+			}
+		}
+		if e.End != nil {
+			return a.AnalyzeExpr(e.End)
+		}
+		return nil
+
 	default:
 		return nil
 	}
 }
 
-func Check(expr syntax.Expr) error {
+func Check(program syntax.Program) error {
 	analyzer := NewAnalyzer()
-	if err := analyzer.AnalyzeExpr(expr); err != nil {
+	if err := analyzer.AnalyzeExpr(program.Expr); err != nil {
 		return err
 	}
 

@@ -14,17 +14,24 @@ const (
 	RBRACE
 	LPAREN
 	RPAREN
+	LBRACKET
+	RBRACKET
 	DOT
+	DOTDOT
 	EQUAL
 	SEMI
 	COMMA
 	COLON
 	LET
+	TYPE
+	MATCH
 	PLUS
 	MINUS
 	STAR
 	SLASH
 	ARROW
+	ARROW_LEFT
+	DOUBLE_ARROW
 )
 
 type Token struct {
@@ -63,10 +70,24 @@ func (l *Lexer) Next() Token {
 	case ')':
 		l.Pos++
 		return Token{Type: RPAREN, Value: ")"}
+	case '[':
+		l.Pos++
+		return Token{Type: LBRACKET, Value: "["}
+	case ']':
+		l.Pos++
+		return Token{Type: RBRACKET, Value: "]"}
 	case '.':
+		if l.Pos+1 < len(l.Input) && l.Input[l.Pos+1] == '.' {
+			l.Pos += 2
+			return Token{Type: DOTDOT, Value: ".."}
+		}
 		l.Pos++
 		return Token{Type: DOT, Value: "."}
 	case '=':
+		if l.Pos+1 < len(l.Input) && l.Input[l.Pos+1] == '>' {
+			l.Pos += 2
+			return Token{Type: DOUBLE_ARROW, Value: "=>"}
+		}
 		l.Pos++
 		return Token{Type: EQUAL, Value: "="}
 	case ';':
@@ -94,6 +115,13 @@ func (l *Lexer) Next() Token {
 		}
 		l.Pos++
 		return Token{Type: MINUS, Value: "-"}
+	case '<':
+		if l.Pos+1 < len(l.Input) && l.Input[l.Pos+1] == '-' {
+			l.Pos += 2
+			return Token{Type: ARROW_LEFT, Value: "<-"}
+		}
+		l.Pos++
+		return Token{Type: EOF}
 	}
 
 	if unicode.IsDigit(rune(ch)) {
@@ -129,8 +157,13 @@ func (l *Lexer) readIdent() Token {
 	}
 	value := l.Input[start:l.Pos]
 
-	if value == "let" {
+	switch value {
+	case "let":
 		return Token{Type: LET, Value: value}
+	case "type":
+		return Token{Type: TYPE, Value: value}
+	case "match":
+		return Token{Type: MATCH, Value: value}
 	}
 
 	return Token{Type: IDENT, Value: value}

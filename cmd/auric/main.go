@@ -25,21 +25,21 @@ func main() {
 
 	lex := lexer.New(string(input))
 	parser := parser.New(lex)
-	expr := parser.Parse()
+	program := parser.Parse()
 
-	if err := totality.Check(expr); err != nil {
+	if err := totality.Check(program); err != nil {
 		fmt.Fprintf(os.Stderr, "totality error: %v\n", err)
 		os.Exit(1)
 	}
 
-	checker := check.New()
-	ty, err := checker.Infer(expr)
+	checker := check.New(program.TypeDefs)
+	ty, err := checker.Infer(program.Expr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "type error: %v\n", err)
 		os.Exit(1)
 	}
 
-	val, err := eval.Eval(expr, make(map[string]eval.Value))
+	val, err := eval.Eval(program, make(map[string]eval.Value))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "runtime error: %v\n", err)
 		os.Exit(1)
