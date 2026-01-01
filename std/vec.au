@@ -1,0 +1,18 @@
+// Standard library: Vector utilities
+// Vec[T, n] is a compile-time type-level macro that expands to a record
+//
+// The Vec type constructor is implemented as a built-in type-level macro
+// that expands Vec[T, n] to the record type .{ _0: T, _1: T, ..., _(n-1): T }
+//
+// Examples:
+//   Vec[Int, zero]                  -> .{}
+//   Vec[Int, succ(zero)]            -> .{ _0: Int }
+//   Vec[Int, succ(succ(zero))]      -> .{ _0: Int, _1: Int }
+//
+// Unlike compiler intrinsics, Vec is implemented through the generic
+// type macro system, which allows user-defined type-level macros.
+//
+// The Vec macro is registered in src/auric/macros.py as a built-in,
+// but could be user-defined for extensibility.
+
+// TODO: Add vector utility functions with new syntax

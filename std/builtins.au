@@ -1,0 +1,19 @@
+// Standard Library: Core Builtins
+//
+// This module provides macros using the unified token tree macro system.
+
+// ============================================================
+// Macros
+// ============================================================
+
+// for macro: iteration over records with dependent types
+//
+// Syntax:
+//   for i = ..vec { body }
+//
+// The macro expands to a fold operation that works with both
+// compile-time known and runtime-determined record lengths.
+//
+macro for => {
+    for $var = .. $expr $block -> @fold ( $expr , .{ } , ( acc , $var ) => { @seq ( acc , $block ) } ) ;
+}

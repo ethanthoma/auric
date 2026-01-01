@@ -1,0 +1,7 @@
+// Standard library: Boolean utilities
+// @Bool type constructors (@true, @false) are built-in
+
+const not: @Bool -> @Bool = (b) => {
+  @true -> @false;
+  @false -> @true;
+}

@@ -1,0 +1,12 @@
+// Standard library: Natural number utilities
+// @Nat type constructors (@zero, @succ) are built-in
+
+const is_zero: @Nat -> @Bool = (n) => {
+  @zero -> @true;
+  @succ(x) -> @false;
+}
+
+const pred: @Nat -> @Nat = (n) => {
+  @zero -> @zero;
+  @succ(x) -> x;
+}

@@ -1,0 +1,4 @@
+// Standard library: List utilities
+// List type constructors (nil, cons) are built-in
+
+// TODO: Add list utilities with new syntax

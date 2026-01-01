@@ -13,8 +13,14 @@
 !src/auric/
 !src/auric/**/*.py
 
-!example/
-!example/*.py
+!examples/
+!examples/*.py
 
 !notes/
 !notes/*.md
+
+!tests/
+!tests/*.py
+
+!std/
+!std/*.au

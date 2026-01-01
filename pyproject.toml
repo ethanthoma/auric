@@ -6,15 +6,37 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
 
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
 [project.scripts]
 auric = "auric.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.ruff]
+line-length = 120
+
 [tool.ruff.lint]
 select = ["I", "W"]
 fixable = ["ALL"]
 
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
 [tool.ty.environment]
 python = "./.venv"
+
+[tool.pyrefly]
+search_path = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.1",
+]
