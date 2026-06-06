@@ -1,20 +1,15 @@
 *
+!*/
 
 !flake.nix
 !flake.lock
 
 !.gitignore
+!.gitattributes
 !README.md
 
-!cmd/
 !cmd/**/*.go
-
-!internal/
-!internal/*
 !internal/**/*.go
-
-!docs/
-!docs/**/*.md
-
-!test/
 !test/**/*.go
+
+!docs/**/*.md
